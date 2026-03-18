@@ -116,8 +116,10 @@ dependencies {
 
     // ObjectBox — on-device vector DB
     implementation(libs.objectbox.android)
-    kapt(libs.objectbox.processor)
 
+    // TFLite
+    implementation(libs.tflite.android)
+    implementation(libs.tflite.gpu)
 
     // Testing
     testImplementation(libs.junit)

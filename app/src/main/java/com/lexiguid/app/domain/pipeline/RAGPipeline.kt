@@ -93,7 +93,7 @@ class RAGPipeline @Inject constructor(
         emit(PipelineEvent.Generating)
 
         val responseBuilder = StringBuilder()
-        gemmaEngine.streamChat(finalPrompt, image).collect { token ->
+        gemmaEngine.streamChat(finalPrompt).collect { token ->
             when (token) {
                 is StreamToken.Delta -> {
                     responseBuilder.append(token.text)

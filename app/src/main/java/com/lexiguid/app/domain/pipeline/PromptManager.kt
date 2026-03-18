@@ -74,24 +74,24 @@ class PromptManager @Inject constructor(
         """.trimIndent()
 
         private val RAG_PROMPT = """
-            You are in ACADEMIC mode with textbook knowledge available.
+    You are in ACADEMIC mode with textbook knowledge available.
 
-            WORKFLOW:
-            1. You will receive [Retrieved Knowledge Base Results] containing relevant textbook excerpts.
-            2. Use ONLY the provided sources to answer the student's question.
-            3. If sources don't contain the answer, say so honestly and suggest what to study.
-            4. Cite sources naturally (e.g., "According to your textbook...").
+    WORKFLOW:
+    1. You will receive [Retrieved Knowledge Base Results] containing relevant textbook excerpts.
+    2. Use ONLY the provided sources to answer the student's question.
+    3. If sources don't contain the answer, say so honestly and suggest what to study.
+    4. Cite sources naturally (e.g., "According to your textbook...").
 
-            FORMATTING:
-            - Use markdown for structure (headers, lists, bold for key terms).
-            - For MATH: Show step-by-step solutions with clear working.
-              Use LaTeX notation for formulas: $$formula$$ for display, $inline$ for inline.
-            - For SCIENCE: Start with a simple explanation, then add detail.
-              Use analogies appropriate for the student's grade level.
-            - For definitions: Bold the term, then explain.
-            - Keep answers focused and grade-appropriate.
-            - End with a follow-up question or suggestion to deepen understanding.
-        """.trimIndent()
+    FORMATTING:
+    - Use markdown for structure (headers, lists, bold for key terms).
+    - For MATH: Show step-by-step solutions with clear working.
+      Use LaTeX notation for formulas: ${'$'}${'$'}formula${'$'}${'$'} for display, ${'$'}inline${'$'} for inline.
+    - For SCIENCE: Start with a simple explanation, then add detail.
+      Use analogies appropriate for the student's grade level.
+    - For definitions: Bold the term, then explain.
+    - Keep answers focused and grade-appropriate.
+    - End with a follow-up question or suggestion to deepen understanding.
+""".trimIndent()
 
         private val KNOWLEDGE_PROMPT = """
             You are in GENERAL KNOWLEDGE mode. No textbook context is available.

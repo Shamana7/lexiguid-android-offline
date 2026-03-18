@@ -10,10 +10,6 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Manages pre-built ObjectBox knowledge base stores on device.
- * Each subject/grade pair has its own ObjectBox store directory.
- */
 @Singleton
 class KnowledgeBaseManager @Inject constructor(
     @ApplicationContext private val context: Context
@@ -23,23 +19,17 @@ class KnowledgeBaseManager @Inject constructor(
     val kbBaseDir: File
         get() = File(context.getExternalFilesDir(null), "knowledge_base")
 
-    /**
-     * Load a pre-built ObjectBox store for a specific subject/grade.
-     * Returns null if the DB files don't exist.
-     */
     fun loadStore(subject: String, grade: String): BoxStore? {
         val key = buildKey(subject, grade)
         stores[key]?.let { return it }
 
         val dbDir = File(kbBaseDir, key)
-        if (!dbDir.exists() || !File(dbDir, "data.mdb").exists()) {
-            return null
-        }
+        if (!dbDir.exists() || !File(dbDir, "data.mdb").exists()) return null
 
         return try {
             val store = MyObjectBox.builder()
                 .directory(dbDir)
-                .readOnly(true)
+                .readOnly()          // ← no argument, just call readOnly()
                 .maxReaders(4)
                 .build()
             stores[key] = store
@@ -49,14 +39,9 @@ class KnowledgeBaseManager @Inject constructor(
         }
     }
 
-    fun getBox(subject: String, grade: String): Box<KnowledgeChunk>? {
-        val store = loadStore(subject, grade) ?: return null
-        return store.boxFor(KnowledgeChunk::class.java)
-    }
+    fun getBox(subject: String, grade: String): Box<KnowledgeChunk>? =
+        loadStore(subject, grade)?.boxFor(KnowledgeChunk::class.java)
 
-    /**
-     * List all available knowledge base directories on device.
-     */
     fun getAvailableKBs(): List<KBInfo> {
         if (!kbBaseDir.exists()) return emptyList()
         return kbBaseDir.listFiles()
