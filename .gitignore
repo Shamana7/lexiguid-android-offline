@@ -11,3 +11,8 @@ local.properties
 /app/build
 /app/release
 google-services.json
+# Models
+*.litertlm
+*.tflite
+*.task
+app/src/main/assets/models/

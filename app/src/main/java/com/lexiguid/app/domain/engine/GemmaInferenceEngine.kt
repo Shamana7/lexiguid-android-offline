@@ -31,8 +31,21 @@ class GemmaInferenceEngine @Inject constructor(
 
     val activeModel: GemmaModel? get() = currentModel
 
-    private fun getModelFile(model: GemmaModel): File =
-        File(context.getExternalFilesDir(null), "models/${model.fileName}")
+    private fun getModelFile(model: GemmaModel): File {
+        val file = File(context.filesDir, model.fileName)
+
+        if (!file.exists()) {
+            context.assets.open("models/${model.fileName}").use { input ->
+
+                file.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            Log.d("MODEL_DEBUG", "Copied model from assets → ${file.absolutePath}")
+        }
+
+        return file
+    }
 
     suspend fun initialize(
         model: GemmaModel,
