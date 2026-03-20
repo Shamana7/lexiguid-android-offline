@@ -1,6 +1,6 @@
 # LexiGuid Android — Offline AI
 
-> **Fully offline AI chat for K-12 students.**
+> **Fully offline AI chat for students.**
 > Ask questions about your textbook. Get answers. No internet required.
 
 <br>
