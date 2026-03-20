@@ -2,6 +2,7 @@ package com.lexiguid.app.domain.engine
 
 import android.content.Context
 import android.util.Log
+import com.google.ai.edge.litertlm.Message.Companion.model
 import com.lexiguid.app.data.model.EmbeddingGemmaInfo
 import com.lexiguid.app.data.model.ModelState
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -43,7 +44,7 @@ class EmbeddingGemmaEngine @Inject constructor(
         _state.value = ModelState.Initializing
 
         try {
-            val modelFile = File(context.filesDir, "models/${EmbeddingGemmaInfo.FILE_NAME}")
+            val modelFile = File(context.getExternalFilesDir(null), "models/${EmbeddingGemmaInfo.FILE_NAME}")
             if (!modelFile.exists()) {
                 _state.value = ModelState.NotDownloaded
                 return@withContext
@@ -109,14 +110,14 @@ class EmbeddingGemmaEngine @Inject constructor(
     }
 
     fun isModelDownloaded(): Boolean {
-        val modelFile = File(context.filesDir, "models/${EmbeddingGemmaInfo.FILE_NAME}")
+        val modelFile = File(context.getExternalFilesDir(null), "models/${EmbeddingGemmaInfo.FILE_NAME}")
         return modelFile.exists() && modelFile.length() > 0
     }
 
     fun release() {
         interpreter?.close()
         interpreter = null
-        _state.value = ModelState.NotDownloaded
+        _state.value = ModelState.Downloaded
     }
 
     companion object {

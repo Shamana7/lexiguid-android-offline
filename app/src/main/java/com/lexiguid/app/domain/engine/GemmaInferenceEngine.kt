@@ -2,24 +2,14 @@ package com.lexiguid.app.domain.engine
 
 import android.content.Context
 import android.util.Log
-import com.google.ai.edge.litertlm.Backend
-import com.google.ai.edge.litertlm.Contents
-import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.SamplerConfig
 import com.lexiguid.app.data.model.GemmaModel
 import com.lexiguid.app.data.model.InferenceConfig
 import com.lexiguid.app.data.model.ModelState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -29,7 +19,7 @@ private const val TAG = "GemmaInferenceEngine"
 
 @Singleton
 class GemmaInferenceEngine @Inject constructor(
-    @param:ApplicationContext private val context: Context  // @param fixes the annotation warning
+    @param:ApplicationContext private val context: Context
 ) {
     private var engine: Engine? = null
     private var conversation: com.google.ai.edge.litertlm.Conversation? = null
@@ -41,8 +31,8 @@ class GemmaInferenceEngine @Inject constructor(
 
     val activeModel: GemmaModel? get() = currentModel
 
-    private fun gpuBackend(): Backend = Backend.GPU()
-    private fun cpuBackend(): Backend = Backend.CPU()
+    private fun getModelFile(model: GemmaModel): File =
+        File(context.getExternalFilesDir(null), "models/${model.fileName}")
 
     suspend fun initialize(
         model: GemmaModel,
@@ -54,69 +44,82 @@ class GemmaInferenceEngine @Inject constructor(
         currentConfig = config
 
         try {
-            val modelPath = File(context.filesDir, "models/${model.fileName}").absolutePath
-            if (!File(modelPath).exists()) {
+            val modelFile = getModelFile(model)
+            Log.i(TAG, "=== INIT START ===")
+            Log.i(TAG, "Model path: ${modelFile.absolutePath}")
+            Log.i(TAG, "Model exists: ${modelFile.exists()}")
+            Log.i(TAG, "Model size: ${modelFile.length()} bytes")
+
+            if (!modelFile.exists()) {
+                Log.e(TAG, "MODEL FILE NOT FOUND")
                 _state.value = ModelState.NotDownloaded
                 return@withContext
             }
 
-            Log.d(TAG, "Initializing ${model.displayName} from $modelPath")
-
-            // Try GPU first, fall back to CPU
-            val newEngine = try {
-                Engine(EngineConfig(modelPath = modelPath, backend = gpuBackend()))
-                    .also { it.initialize() }
-            } catch (gpuEx: Exception) {
-                Log.w(TAG, "GPU failed, falling back to CPU", gpuEx)
-                Engine(EngineConfig(modelPath = modelPath, backend = cpuBackend()))
-                    .also { it.initialize() }
-            }
+            val engineConfig = EngineConfig(modelPath = modelFile.absolutePath)
+            val newEngine = Engine(engineConfig)
+            newEngine.initialize()
+            Log.i(TAG, "Engine initialized")
 
             engine = newEngine
             currentModel = model
-            resetConversation(config.systemInstruction)
+
+            conversation = newEngine.createConversation()
+            Log.i(TAG, "Conversation created")
+
             _state.value = ModelState.Ready
-            Log.d(TAG, "${model.displayName} ready")
+            Log.i(TAG, "=== INIT COMPLETE ===")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize ${model.displayName}", e)
+            Log.e(TAG, "=== INIT FAILED: ${e.message} ===", e)
             _state.value = ModelState.Error(e.message ?: "Unknown error")
         }
     }
 
     fun resetConversation(systemInstruction: String) {
         conversation?.close()
-        val config = currentConfig ?: return
         val eng = engine ?: return
-
-        val conversationConfig = ConversationConfig(
-            systemInstruction = if (systemInstruction.isNotBlank())
-                Contents.of(systemInstruction) else null,
-            samplerConfig = SamplerConfig(
-                topK = config.topK,
-                topP = config.topP.toDouble(),
-                temperature = config.temperature.toDouble()
-            )
-        )
-        conversation = eng.createConversation(conversationConfig)
+        conversation = eng.createConversation()
+        Log.i(TAG, "Conversation reset")
     }
 
     fun streamChat(text: String): Flow<StreamToken> = flow {
+        Log.i(TAG, "=== STREAM START: $text ===")
+
         val conv = conversation
             ?: throw IllegalStateException("Engine not initialized.")
+
         try {
+            var tokenCount = 0
+
             conv.sendMessageAsync(text)
-                .catch { e -> emit(StreamToken.Error(e.message ?: "Inference error")) }
-                .collect { message -> emit(StreamToken.Delta(message.toString())) }
+                .catch { e ->
+                    Log.e(TAG, "Flow error: ${e.message}", e)
+                    emit(StreamToken.Error(e.message ?: "Inference error"))
+                }
+                .collect { message ->
+                    val raw = message.toString()
+                    tokenCount++
+                    Log.d(TAG, "Token #$tokenCount: [$raw]")
+                    if (raw.isNotEmpty()) {
+                        emit(StreamToken.Delta(raw))
+                    }
+                }
+
+            Log.i(TAG, "=== STREAM DONE: $tokenCount tokens ===")
             emit(StreamToken.Done(""))
+
         } catch (e: Exception) {
+            Log.e(TAG, "=== STREAM EXCEPTION: ${e.message} ===", e)
             emit(StreamToken.Error(e.message ?: "Inference error"))
         }
     }.flowOn(Dispatchers.IO)
 
     fun isModelDownloaded(model: GemmaModel): Boolean {
-        val modelFile = File(context.filesDir, "models/${model.fileName}")
-        return modelFile.exists() && modelFile.length() > 0
+        val modelFile = getModelFile(model)
+        val exists = modelFile.exists() && modelFile.length() > 0
+        Log.i(TAG, "isModelDownloaded: $exists — ${modelFile.absolutePath}")
+        return exists
     }
 
     fun release() {
@@ -127,6 +130,7 @@ class GemmaInferenceEngine @Inject constructor(
         currentModel = null
         currentConfig = null
         _state.value = ModelState.NotDownloaded
+        Log.i(TAG, "Engine released")
     }
 }
 

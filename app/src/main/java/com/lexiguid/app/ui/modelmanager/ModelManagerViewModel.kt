@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import java.io.File
 
 @HiltViewModel
 class ModelManagerViewModel @Inject constructor(
@@ -50,9 +51,11 @@ class ModelManagerViewModel @Inject constructor(
         } ?: 0L
 
         val modelStates = GemmaModel.entries.associateWith { model ->
+            val isDownloaded = gemmaEngine.isModelDownloaded(model)
+
             when {
                 gemmaEngine.activeModel == model -> ModelState.Ready
-                gemmaEngine.isModelDownloaded(model) -> ModelState.Downloaded
+                isDownloaded -> ModelState.Downloaded
                 else -> ModelState.NotDownloaded
             }
         }
@@ -79,8 +82,6 @@ class ModelManagerViewModel @Inject constructor(
             _uiState.update {
                 it.copy(modelStates = it.modelStates + (model to ModelState.Downloading(0f)))
             }
-            // TODO: Implement WorkManager-based download from HuggingFace
-            // For now, update state to show the flow
             _uiState.update {
                 it.copy(modelStates = it.modelStates + (model to ModelState.Downloading(0.5f)))
             }
@@ -92,8 +93,13 @@ class ModelManagerViewModel @Inject constructor(
             if (gemmaEngine.activeModel == model) {
                 gemmaEngine.release()
             }
-            val modelFile = java.io.File(context.filesDir, "models/${model.fileName}")
+
+            val modelFile = File(
+                context.getExternalFilesDir(null),
+                "models/${model.fileName}"
+            )
             modelFile.delete()
+
             refreshState()
         }
     }
@@ -105,6 +111,7 @@ class ModelManagerViewModel @Inject constructor(
             }
 
             val systemPrompt = promptManager.getSystemPrompt(AgentModeRouter.Mode.RAG)
+
             gemmaEngine.initialize(
                 model = model,
                 config = InferenceConfig(
@@ -122,23 +129,37 @@ class ModelManagerViewModel @Inject constructor(
 
     fun downloadEmbeddingModel() {
         viewModelScope.launch {
-            _uiState.update { it.copy(embeddingModelState = ModelState.Downloading(0f)) }
-            // TODO: Implement WorkManager-based download
+            _uiState.update {
+                it.copy(embeddingModelState = ModelState.Downloading(0f))
+            }
         }
     }
 
     fun deleteEmbeddingModel() {
         viewModelScope.launch {
             embeddingEngine.release()
-            val modelFile = java.io.File(context.filesDir, "models/${EmbeddingGemmaInfo.FILE_NAME}")
+
+            val modelFile = File(
+                context.getExternalFilesDir(null),
+                "models/${EmbeddingGemmaInfo.FILE_NAME}"
+            )
             modelFile.delete()
+
             refreshState()
         }
+    }
+
+    fun forceRefresh() {
+        refreshState()
     }
 
     fun deleteKnowledgeBase(subject: String, grade: String) {
         kbManager.deleteKB(subject, grade)
         refreshState()
+    }
+
+    fun isModelActuallyPresent(model: GemmaModel): Boolean {
+        return gemmaEngine.isModelDownloaded(model)
     }
 }
 

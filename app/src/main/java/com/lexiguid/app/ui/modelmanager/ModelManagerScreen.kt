@@ -21,6 +21,10 @@ fun ModelManagerScreen(
     onNavigateBack: () -> Unit,
     viewModel: ModelManagerViewModel = hiltViewModel()
 ) {
+
+    LaunchedEffect(Unit) {
+        viewModel.forceRefresh()
+    }
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
@@ -74,6 +78,7 @@ fun ModelManagerScreen(
                 InferenceModelCard(
                     model = model,
                     state = uiState.modelStates[model] ?: ModelState.NotDownloaded,
+                    isDownloaded = viewModel.isModelActuallyPresent(model),
                     isActive = model == uiState.activeModel,
                     onDownload = { viewModel.downloadModel(model) },
                     onDelete = { viewModel.deleteModel(model) },
@@ -157,6 +162,7 @@ private fun InferenceModelCard(
     model: GemmaModel,
     state: ModelState,
     isActive: Boolean,
+    isDownloaded: Boolean,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
     onActivate: () -> Unit
@@ -206,10 +212,22 @@ private fun InferenceModelCard(
 
             when (state) {
                 is ModelState.NotDownloaded -> {
-                    Button(onClick = onDownload, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Download, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Download")
+                    if (isDownloaded) {
+                        Button(
+                            onClick = onActivate,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Initialize")
+                        }
+                    } else {
+                        Button(
+                            onClick = onDownload,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Download")
+                        }
                     }
                 }
                 is ModelState.Downloading -> {

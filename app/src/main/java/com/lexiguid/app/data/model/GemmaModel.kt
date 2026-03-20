@@ -2,7 +2,7 @@ package com.lexiguid.app.data.model
 
 /**
  * Supported on-device Gemma models.
- * User can switch between these from Model Manager.
+ * We are using ONLY the 270M .task model for now (fast + works on most devices)
  */
 enum class GemmaModel(
     val displayName: String,
@@ -14,29 +14,19 @@ enum class GemmaModel(
     val supportsAudio: Boolean,
     val description: String
 ) {
-    GEMMA3_4B(
-        displayName = "Gemma 3 4B",
-        huggingFaceId = "litert-community/Gemma3-4B-IT",
-        fileName = "gemma3-4b-it-int4.litertlm",
-        sizeBytes = 2_300_000_000L,
-        minRamGb = 8,
+
+    GEMMA_270M(
+        displayName = "Gemma 270M (Fast)",
+        huggingFaceId = "",
+        fileName = "gemma3-270m-it-q8.litertlm",
+        sizeBytes = 300_000_000L,
+        minRamGb = 4,
         supportsVision = false,
         supportsAudio = false,
-        description = "Fast text-only model. Best for academic Q&A."
-    ),
-    GEMMA3N_E2B(
-        displayName = "Gemma 3n E2B",
-        huggingFaceId = "google/gemma-3n-E2B-it-litert-lm",
-        fileName = "gemma-3n-E2B-it-int4.litertlm",
-        sizeBytes = 3_655_827_456L,
-        minRamGb = 8,
-        supportsVision = true,
-        supportsAudio = true,
-        description = "Multimodal model. Supports text, image, and audio input."
+        description = "Lightweight model for testing on-device AI"
     );
-
     companion object {
-        val DEFAULT = GEMMA3_4B
+        val DEFAULT = GEMMA_270M
 
         fun fromFileName(name: String): GemmaModel? =
             entries.find { it.fileName == name }
@@ -44,12 +34,13 @@ enum class GemmaModel(
 }
 
 /**
- * EmbeddingGemma model info — always required for RAG search.
+ * EmbeddingGemma model info — REQUIRED for RAG search
+ * (for now we reuse same model just to make system work)
  */
 object EmbeddingGemmaInfo {
     const val DISPLAY_NAME = "EmbeddingGemma"
-    const val FILE_NAME = "embedding_gemma_384.tflite"
-    const val SIZE_BYTES = 200_000_000L
+    const val FILE_NAME = "gemma3-270m-it-q8.litertlm"
+    const val SIZE_BYTES = 300_000_000L
     const val EMBEDDING_DIMENSIONS = 384
     const val MAX_TOKENS = 2048
 }
