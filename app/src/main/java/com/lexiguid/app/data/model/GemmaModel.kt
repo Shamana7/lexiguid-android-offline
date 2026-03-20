@@ -16,14 +16,14 @@ enum class GemmaModel(
 ) {
 
     GEMMA_270M(
-        displayName = "Gemma 270M (Fast)",
+        displayName = "Gemma 1B (Better Quality)",
         huggingFaceId = "",
-        fileName = "gemma3-270m-it-q8.litertlm",
-        sizeBytes = 300_000_000L,
+        fileName = "gemma3-1b-it-int4.litertlm",
+        sizeBytes = 600_000_000L,
         minRamGb = 4,
         supportsVision = false,
         supportsAudio = false,
-        description = "Lightweight model for testing on-device AI"
+        description = "1B model for better quality answers"
     );
     companion object {
         val DEFAULT = GEMMA_270M
@@ -39,8 +39,8 @@ enum class GemmaModel(
  */
 object EmbeddingGemmaInfo {
     const val DISPLAY_NAME = "EmbeddingGemma"
-    const val FILE_NAME = "gemma3-270m-it-q8.litertlm"
-    const val SIZE_BYTES = 300_000_000L
+    const val FILE_NAME = "gemma3-1b-it-int4.litertlm"
+    const val SIZE_BYTES = 600_000_000L
     const val EMBEDDING_DIMENSIONS = 384
     const val MAX_TOKENS = 2048
 }

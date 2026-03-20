@@ -31,21 +31,27 @@ class GemmaInferenceEngine @Inject constructor(
 
     val activeModel: GemmaModel? get() = currentModel
 
-    private fun getModelFile(model: GemmaModel): File {
-        val file = File(context.filesDir, model.fileName)
+// PRODUCTION: Uncomment this to bundle model inside APK via assets/
+// 1. Put model file in app/src/main/assets/models/
+// 2. Add to .gitignore: app/src/main/assets/models/
+// 3. Comment out the single-line getModelFile below
 
-        if (!file.exists()) {
-            context.assets.open("models/${model.fileName}").use { input ->
-
-                file.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-            Log.d("MODEL_DEBUG", "Copied model from assets → ${file.absolutePath}")
-        }
-
-        return file
-    }
+//    private fun getModelFile(model: GemmaModel): File {
+//        val file = File(context.filesDir, model.fileName)
+//
+//        if (!file.exists()) {
+//            context.assets.open("models/${model.fileName}").use { input ->
+//
+//                file.outputStream().use { output ->
+//                    input.copyTo(output)
+//                }
+//            }
+//            Log.d("MODEL_DEBUG", "Copied model from assets → ${file.absolutePath}")
+//        }
+//        return file
+//    }
+private fun getModelFile(model: GemmaModel): File =
+    File(context.getExternalFilesDir(null), "models/${model.fileName}")
 
     suspend fun initialize(
         model: GemmaModel,
