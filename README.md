@@ -11,22 +11,21 @@ LexiGuid is an Android app that runs a real LLM (Gemma 3) directly on the device
 
 This repo contains the **offline module** of LexiGuid. The online version (API-based) was built separately and is fully working. This module adds on-device inference on top of that foundation.
 
-**Status:** Offline inference ✅ working. RAG pipeline ⚠️ structure ready, needs real knowledge base to complete.
+**Status:** Offline inference ✅ working (Gemma 1B). RAG pipeline ⚠️ structure ready, needs real knowledge base to complete.
 
 <br>
 
 ## Demo
 
-```
-Student: what is photosynthesis
-LexiGuid: Photosynthesis is the process by which plants and other organisms
-          convert light energy into chemical energy in the form of glucose.
+Tested on Samsung Galaxy S24 — fully offline, no WiFi, no SIM data.
 
-Student: tq
-LexiGuid: You're right to ask!
-```
+| Question | Response | Latency |
+|----------|----------|---------|
+| "what is photosynthesis" | "Photosynthesis is the process by which plants convert light energy into chemical energy in the form of glucose." | ~500ms first token |
+| "tq" | "You're right to ask!" | ~140ms |
+| "what's life" | "That's a great question! It's a broad and multifaceted concept." | ~160ms |
 
-Streaming token by token. ~20ms per token. Samsung S24. Fully offline.
+~20ms per token. Gemma 1B int4. GPU backend auto-selected.
 
 <br>
 
@@ -66,7 +65,7 @@ RAGPipeline
 | What | Library | Version |
 |------|---------|---------|
 | On-device LLM runtime | LiteRT-LM | 0.9.0-alpha06 |
-| LLM model | Gemma 3 270M (q8) | `.litertlm` format |
+| LLM model | Gemma 3 1B (int4) | `.litertlm` format |
 | Vector database | ObjectBox | 4.0.3 |
 | DI | Hilt | 2.57.2 |
 | UI | Jetpack Compose | BOM 2026.02.00 |
@@ -107,6 +106,7 @@ app/src/main/
 ### Prerequisites
 - Android Studio Hedgehog or newer
 - Android device with 4GB+ RAM (8GB recommended for larger models)
+- Physical device only — emulators don't support GPU inference
 - USB debugging enabled
 
 ### Build
@@ -122,28 +122,30 @@ cd android
 
 ### Add the model file
 
-The model is **not committed to git** (300MB+). You need to add it manually.
+The model is **not committed to git** (300MB–1GB+). You need to add it manually.
 
 **Option A — Push via ADB (development)**
 ```bash
-adb push gemma3-270m-it-q8.litertlm \
-  /storage/emulated/0/Android/data/com.lexiguid.app/files/models/gemma3-270m-it-q8.litertlm
+adb push gemma3-1b-it-int4.litertlm \
+  /sdcard/Android/data/com.lexiguid.app/files/models/gemma3-1b-it-int4.litertlm
 ```
 
 **Option B — Copy into assets (for APK distribution)**
 ```
-app/src/main/assets/models/gemma3-270m-it-q8.litertlm
+app/src/main/assets/models/gemma3-1b-it-int4.litertlm
 ```
 The app copies it to internal storage on first launch automatically.
+Uncomment the `getModelFile` assets block in `GemmaInferenceEngine.kt` to enable this.
 
 ### Download the model
 
 | Model | Format | Size | Link |
 |-------|--------|------|------|
-| Gemma 3 270M q8 | `.litertlm` | ~290MB | [litert-community/gemma-3-270m-it](https://huggingface.co/litert-community) |
-| Gemma 3 1B q8 | `.litertlm` | ~1GB | [litert-community](https://huggingface.co/litert-community) |
+| Gemma 3 270M q8 | `.litertlm` | ~290MB | [litert-community on HuggingFace](https://huggingface.co/litert-community) |
+| Gemma 3 1B int4 | `.litertlm` | ~600MB | [litert-community on HuggingFace](https://huggingface.co/litert-community) |
 
 > ⚠️ You must accept Google's license on HuggingFace before downloading.
+> ⚠️ Only `.litertlm` format works. `.task` and TFLite `.litertlm` files produce `<pad>` output.
 
 <br>
 
@@ -159,7 +161,19 @@ Engine(EngineConfig(modelPath = path))
 Engine(EngineConfig(modelPath = path, backend = Backend.GPU()))
 ```
 
-This took a long time to figure out. LiteRT-LM selects the best available backend automatically. Explicitly passing `Backend.GPU()` or `Backend.CPU()` causes degenerate `<pad>` output on the 270M model. Just leave it out.
+This took a long time to figure out. LiteRT-LM selects the best available backend automatically. Explicitly passing `Backend.GPU()` or `Backend.CPU()` causes degenerate `<pad>` output. Just leave it out.
+
+Same rule for `createConversation()` — call it with no arguments:
+
+```kotlin
+// ✅ CORRECT
+val conversation = engine.createConversation()
+
+// ❌ WRONG — SamplerConfig breaks small models
+val conversation = engine.createConversation(ConversationConfig(
+    samplerConfig = SamplerConfig(topK = 64, topP = 0.95, temperature = 1.0)
+))
+```
 
 <br>
 
@@ -179,12 +193,14 @@ The RAG pipeline code is fully written and wired up. What's missing is a real pr
 ```
 
 **To complete RAG:**
-1. Build an ObjectBox store with textbook chunks + embeddings (Python side)
-2. Push the store directory to:
+1. Get the pre-built ObjectBox store from the backend/ML engineer (they have the Python pipeline that processes textbooks → embeddings → ObjectBox)
+2. Push the store directory to the device:
+   ```bash
+   adb push science_grade8/ \
+     /sdcard/Android/data/com.lexiguid.app/files/knowledge_base/science_grade8/
    ```
-   /sdcard/Android/data/com.lexiguid.app/files/knowledge_base/<subject>_<grade>/
-   ```
-3. The app auto-detects it via `KnowledgeBaseManager`
+3. The app auto-detects it via `KnowledgeBaseManager` — no code changes needed
+4. Select a subject in the chat screen (book icon, bottom left) to activate RAG mode
 
 The knowledge base entity format:
 
@@ -193,8 +209,8 @@ The knowledge base entity format:
 class KnowledgeChunk {
     @Id var id: Long
     @HnswIndex(dimensions = 384, distanceType = VectorDistanceType.COSINE)
-    var embedding: FloatArray?
-    var pageContent: String?
+    var embedding: FloatArray?   // pre-computed, 384 floats per chunk
+    var pageContent: String?     // the actual textbook paragraph
     var subject: String?
     var chapter: String?
     var classLevel: String?
@@ -203,14 +219,13 @@ class KnowledgeChunk {
 
 <br>
 
-## Known Issues
+## What's Left to Build
 
-| Issue | Notes |
-|-------|-------|
-| 270M model gives short answers | Expected — upgrade to 1B/2B |
-| RAG not connected to real KB | Pipeline ready, needs KB files |
-| Model download in-app not built | Currently manual push via ADB or assets |
-| EmbeddingGemmaEngine reuses inference model | Needs dedicated embedding model for accuracy |
+| Task | Effort | Notes |
+|------|--------|-------|
+| RAG with real knowledge base | Medium | Pipeline fully coded. Need ObjectBox KB files from backend/ML team. See RAG section above. |
+| In-app model download | Medium | `ModelManagerViewModel.kt` has TODO markers. Needs WorkManager + HuggingFace download logic. |
+| Dedicated embedding model | Low | Replace EmbeddingGemmaEngine with nomic-embed or all-MiniLM for better retrieval accuracy. |
 
 <br>
 
@@ -232,8 +247,8 @@ app/src/main/assets/models/
 | APK | Model | Status |
 |-----|-------|--------|
 | `lexiguid-offline-v0.1-gemma270m.apk` | Gemma 270M | ✅ Released |
-| `lexiguid-offline-v0.2-gemma2b.apk` | Gemma 2B | 🔜 Pending |
-| `lexiguid-offline-v1.0-rag.apk` | Gemma 2B + RAG | 🔜 Pending |
+| `lexiguid-offline-v0.2-gemma1b.apk` | Gemma 1B | ✅ Released |
+| `lexiguid-offline-v1.0-rag.apk` | Gemma 1B + RAG | 🔜 Pending |
 
 <br>
 
@@ -246,14 +261,16 @@ Key fixes made:
 | Problem | Fix |
 |---------|-----|
 | ObjectBox plugin not found in Gradle | Add `resolutionStrategy` mapping in `pluginManagement` |
-| `@HnswIndex` unresolved | ObjectBox must be 4.0.x, not 3.x |
-| `readOnly(true)` error | `readOnly()` takes no arguments in 4.x |
+| `@HnswIndex` / `VectorDistanceType` unresolved | ObjectBox must be 4.0.x, not 3.x |
+| `readOnly(true)` error in BoxStoreBuilder | `readOnly()` takes no arguments in 4.x |
 | `<pad>` tokens only, no real output | Remove `backend` param from `EngineConfig` entirely |
 | `sendMessageAsync()` type error | Takes plain `String`, not `Contents.of()` |
-| `createConversation()` with SamplerConfig | No-arg version works; config breaks 270M |
+| `createConversation()` with SamplerConfig | No-arg version works; SamplerConfig breaks 270M |
 | ObjectBox query `.and()` error | Chain all conditions inside `box.query()`, not on `QueryBuilder` |
 | Manifest `tools:node` not bound | Add `xmlns:tools` to `<manifest>` tag |
-| `<uses-native-library>` in wrong place | Must be inside `<application>`, not `<manifest>` |
+| `<uses-native-library>` AAPT error | Must be inside `<application>`, not `<manifest>` |
+| KSP/Kotlin version mismatch warnings | KSP prefix must exactly match Kotlin version |
+| `MyObjectBox` unresolved reference | Build once — ObjectBox annotation processor auto-generates it |
 
 <br>
 
@@ -264,4 +281,5 @@ Built by the Android engineer at Kruthak — March 2026.
 - The **online version** is separate and complete. APIs were provided by backend.
 - This **offline module** was designed and debugged from scratch.
 - For RAG knowledge base format and the Python embedding pipeline, speak to the backend/ML engineer.
-- The architecture is clean and ready to extend — RAG just needs the KB files.
+- The architecture is clean and ready to extend — RAG just needs the KB files dropped in.
+- Full technical knowledge transfer document uploaded in the work drive: `LexiGuid_KnowledgeTransfer.docx`
